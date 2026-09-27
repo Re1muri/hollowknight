@@ -71,7 +71,8 @@
             const LOADER_URL = `${CDN_BUILD_URL}/Glitches HK.loader.js`;
             // Keep the worker on this site; the <base> tag is only for game assets.
             const SERVICE_WORKER_URL = new URL("asset-streamer-sw.js", location.href).href;
-            const SERVICE_WORKER_SCOPE = new URL("./", location.href).pathname;
+            // Keep the scope absolute because the document's <base> points at the CDN.
++            const SERVICE_WORKER_SCOPE = new URL("./", location.href).href;
 
             const loadingText = document.getElementById("loading-text");
             const container = document.getElementById("unity-container");

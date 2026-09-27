@@ -4,6 +4,9 @@ const SPLIT_ASSETS = new Map([
     ["Glitches HK.data", 44],
     ["Glitches HK.wasm", 3]
 ]);
+const CDN_BUILD_URL =
+    "https://cdn.jsdelivr.net/gh/Re1muri/hollowknight@latest/Build/";
+const PACKET_CACHE_NAME = "hollow-knight-packets-v1";
 
 self.addEventListener("install", event => {
     event.waitUntil(self.skipWaiting());
@@ -29,20 +32,32 @@ function findSplitAsset(pathname) {
 function streamParts(request, filename, partCount) {
     let nextPart = 1;
     let currentReader = null;
+    let packetCachePromise;
 
     return new ReadableStream({
         async pull(controller) {
             try {
                 while (nextPart <= partCount) {
                     if (!currentReader) {
-                        // Parts sit beside the original asset in the same directory.
-                        const directory = new URL(".", request.url);
                         const partUrl = new URL(
                             `${encodeURIComponent(filename)}.part${nextPart}`,
-                            directory
+                            CDN_BUILD_URL
                         );
 
-                        const response = await fetch(partUrl);
+                        packetCachePromise ||= caches.open(PACKET_CACHE_NAME);
+                        const packetCache = await packetCachePromise;
+                        let response = await packetCache.match(partUrl);
+
+                        if (!response) {
+                            response = await fetch(partUrl, { mode: "cors" });
+
+                            if (response.ok) {
+                                // Keep each packet available for the next launch.
+                                await packetCache
+                                    .put(partUrl, response.clone())
+                                    .catch(() => {});
+                            }
+                        }
 
                         if (!response.ok || !response.body) {
                             throw new Error(

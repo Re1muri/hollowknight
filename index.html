@@ -66,13 +66,17 @@
             "use strict";
 
             const CDN_URL = "https://cdn.jsdelivr.net/gh/Re1muri/hollowknight@latest/";
-            const BUILD_URL = "Build";
             const CDN_BUILD_URL = `${CDN_URL}Build`;
+            const LOCAL_BUILD_URL = new URL("Build/", location.href).href;
             const LOADER_URL = `${CDN_BUILD_URL}/Glitches HK.loader.js`;
             // Keep the worker on this site; the <base> tag is only for game assets.
             const SERVICE_WORKER_URL = new URL("asset-streamer-sw.js", location.href).href;
             // Keep the scope absolute because the document's <base> points at the CDN.
+<<<<<<< HEAD
 +            const SERVICE_WORKER_SCOPE = new URL("./", location.href).href;
+=======
+            const SERVICE_WORKER_SCOPE = new URL("./", location.href).href;
+>>>>>>> 725759c (Add project fil)
 
             const loadingText = document.getElementById("loading-text");
             const container = document.getElementById("unity-container");
@@ -147,9 +151,9 @@
                 }
 
                 const config = {
-                    dataUrl: `${BUILD_URL}/Glitches HK.data`,
+                    dataUrl: `${LOCAL_BUILD_URL}Glitches HK.data`,
                     frameworkUrl: `${CDN_BUILD_URL}/Glitches HK.framework.js`,
-                    codeUrl: `${BUILD_URL}/Glitches HK.wasm`,
+                    codeUrl: `${LOCAL_BUILD_URL}Glitches HK.wasm`,
                     streamingAssetsUrl: `${CDN_URL}StreamingAssets`,
                     companyName: "Stratus Dev Ports",
                     productName: "Hollow Knight",

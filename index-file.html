@@ -4,8 +4,8 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Hollow Knight</title>
-    <link rel="shortcut icon" href="https://cdn.jsdelivr.net/gh/Re1muri/hollowknight@latest/TemplateData/favicon.ico">
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/Re1muri/hollowknight@latest/TemplateData/style.css">
+    <link rel="shortcut icon" href="https://cdn.jsdelivr.net/gh/web-ports/hollow-knight@latest/TemplateData/favicon.ico">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/web-ports/hollow-knight@latest/TemplateData/style.css">
     <style>
         html, body {
             width: 100%;
@@ -21,10 +21,9 @@
             inset: 20px 0 auto;
             z-index: 10;
             color: white;
-            font: 24px Arial, sans-serif;
+            font: 32px Arial, sans-serif;
             text-align: center;
             pointer-events: none;
-            white-space: pre-wrap;
         }
 
         #unity-container {
@@ -42,7 +41,7 @@
     </style>
 </head>
 <body>
-    <div id="loading-text" role="status" aria-live="polite">Starting local launcher...</div>
+    <div id="loading-text">LOADING...</div>
 
     <div id="unity-container" class="unity-desktop">
         <canvas id="unity-canvas"></canvas>
@@ -63,17 +62,18 @@
         (() => {
             "use strict";
 
-            // This file is intentionally the only local launcher. The page can
-            // be opened as file://; the build remains hosted on jsDelivr.
-            const CDN_URL = "https://cdn.jsdelivr.net/gh/Re1muri/hollowknight@latest/";
+            // Local file:// launcher. The HTML is local, while all Unity
+            // assets are fetched from jsDelivr.
+            const CDN_URL =
+                "https://cdn.jsdelivr.net/gh/web-ports/hollow-knight@latest/";
             const BUILD_URL = `${CDN_URL}Build/`;
 
-            // These names and counts match the files in this repository.
-            // Re1muri's current CDN build uses these exact filenames/counts.
+            // These must match the filenames before ".partN" in the repository.
             const DATA_FILE = "Glitches HK.data";
-            const DATA_PARTS = 44;
             const WASM_FILE = "Glitches HK.wasm";
-            const WASM_PARTS = 3;
+            const DATA_PARTS = 42;
+            const WASM_PARTS = 2;
+
             const LOADER_URL = `${BUILD_URL}Glitches HK.loader.js`;
             const FRAMEWORK_URL = `${BUILD_URL}Glitches HK.framework.js`;
 
@@ -83,78 +83,77 @@
             const loadingBar = document.getElementById("unity-loading-bar");
             const progressBar = document.getElementById("unity-progress-bar-full");
             const mobileWarning = document.getElementById("unity-mobile-warning");
+
             const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
 
             function setLoadingText(message) {
                 loadingText.textContent = message;
             }
 
-            function loadScript(url) {
+            function loadScript(src) {
                 return new Promise((resolve, reject) => {
                     const script = document.createElement("script");
-                    script.src = url;
+                    script.src = src;
                     script.async = true;
                     script.onload = resolve;
-                    script.onerror = () => reject(new Error(`Runtime script failed: ${url}`));
+                    script.onerror = () =>
+                        reject(new Error(`Could not load Unity loader: ${src}`));
                     document.head.appendChild(script);
                 });
             }
 
-            function makePartUrls(filename, count) {
+            function makePartUrls(file, count) {
                 return Array.from(
                     { length: count },
-                    (_, index) => `${BUILD_URL}${encodeURIComponent(filename)}.part${index + 1}`
+                    (_, i) => `${BUILD_URL}${encodeURIComponent(file)}.part${i + 1}`
                 );
             }
 
-            async function downloadSplitAsset(filename, count, label, mimeType) {
+            async function downloadSplitFile(file, count, label) {
                 const parts = [];
                 let totalBytes = 0;
+                const urls = makePartUrls(file, count);
 
-                for (const [index, url] of makePartUrls(filename, count).entries()) {
-                    const partNumber = index + 1;
-                    setLoadingText(`Downloading ${label}: part ${partNumber}/${count}`);
+                for (let i = 0; i < urls.length; i++) {
+                    const n = i + 1;
+                    setLoadingText(`LOADING ${label}... part ${n}/${count}`);
 
-                    let response;
-                    try {
-                        // CORS is required here. Do not use no-cors: opaque
-                        // responses cannot be read or reconstructed.
-                        response = await fetch(url, {
-                            mode: "cors",
-                            cache: "force-cache"
-                        });
-                    } catch (error) {
-                        throw new Error(
-                            `${label} part ${partNumber}/${count} request was blocked: ${url}\n${error.message}`
-                        );
-                    }
+                    const response = await fetch(urls[i], {
+                        cache: "force-cache"
+                    });
 
                     if (!response.ok) {
                         throw new Error(
-                            `${label} part ${partNumber}/${count} failed: HTTP ${response.status} (${url})`
+                            `${label} part ${n}/${count} failed: HTTP ${response.status}`
                         );
                     }
 
-                    try {
-                        const bytes = new Uint8Array(await response.arrayBuffer());
-                        parts.push(bytes);
-                        totalBytes += bytes.byteLength;
-                    } catch (error) {
-                        throw new Error(
-                            `${label} part ${partNumber}/${count} could not be read: ${url}\n${error.message}`
-                        );
-                    }
+                    const bytes = new Uint8Array(await response.arrayBuffer());
+                    parts.push(bytes);
+                    totalBytes += bytes.byteLength;
+
+                    setLoadingText(
+                        `LOADING ${label}... ${Math.round(n / count * 100)}% (${n}/${count})`
+                    );
                 }
 
-                setLoadingText(`Reassembling ${label} (${totalBytes.toLocaleString()} bytes)...`);
+                const blob = new Blob(parts, {
+                    type: label === "WASM"
+                        ? "application/wasm"
+                        : "application/octet-stream"
+                });
+
                 return {
-                    url: URL.createObjectURL(new Blob(parts, { type: mimeType })),
+                    url: URL.createObjectURL(blob),
                     size: totalBytes
                 };
             }
 
             function configureCanvas() {
-                const dpr = isMobile ? 1 : Math.min(window.devicePixelRatio || 1, 1.5);
+                const dpr = isMobile
+                    ? 1
+                    : Math.min(window.devicePixelRatio || 1, 1.5);
+
                 canvas.width = Math.max(1, Math.floor(canvas.clientWidth * dpr));
                 canvas.height = Math.max(1, Math.floor(canvas.clientHeight * dpr));
             }
@@ -162,6 +161,7 @@
             async function startGame() {
                 container.hidden = false;
                 loadingBar.style.display = "block";
+
                 if (isMobile) {
                     container.className = "unity-mobile";
                     mobileWarning.style.display = "block";
@@ -170,46 +170,54 @@
                 configureCanvas();
                 window.addEventListener("resize", configureCanvas);
 
-                const dataAsset = await downloadSplitAsset(
-                    DATA_FILE, DATA_PARTS, "game data", "application/octet-stream"
-                );
-                const wasmAsset = await downloadSplitAsset(
-                    WASM_FILE, WASM_PARTS, "WebAssembly", "application/wasm"
+                setLoadingText("PREPARING GAME DATA...");
+                const dataAsset = await downloadSplitFile(
+                    DATA_FILE, DATA_PARTS, "DATA"
                 );
 
-                setLoadingText("Loading Unity bootstrap runtime...");
+                setLoadingText("PREPARING GAME CODE...");
+                const wasmAsset = await downloadSplitFile(
+                    WASM_FILE, WASM_PARTS, "WASM"
+                );
+
+                setLoadingText("LOADING UNITY ENGINE...");
                 await loadScript(LOADER_URL);
+
                 if (typeof window.createUnityInstance !== "function") {
-                    throw new Error(`Runtime loaded from ${LOADER_URL}, but createUnityInstance() is missing.`);
+                    throw new Error(
+                        "Unity loader loaded, but createUnityInstance() was not found."
+                    );
                 }
 
                 const config = {
                     dataUrl: dataAsset.url,
                     frameworkUrl: FRAMEWORK_URL,
                     codeUrl: wasmAsset.url,
-                    // Preserve the build's StreamingAssets directory handling.
                     streamingAssetsUrl: `${CDN_URL}StreamingAssets`,
                     companyName: "Stratus Dev Ports",
                     productName: "Hollow Knight",
                     productVersion: "Perfect Port",
-                    devicePixelRatio: isMobile ? 1 : Math.min(window.devicePixelRatio || 1, 1.5)
+                    devicePixelRatio: isMobile
+                        ? 1
+                        : Math.min(window.devicePixelRatio || 1, 1.5)
                 };
 
-                setLoadingText("Starting Unity game runtime...");
-                window.unityInstance = await window.createUnityInstance(
+                setLoadingText("STARTING UNITY...");
+
+                window.unityInstance = await createUnityInstance(
                     canvas,
                     config,
                     progress => {
                         const percent = Math.round(progress * 100);
                         progressBar.style.width = `${percent}%`;
-                        setLoadingText(`Starting game... ${percent}%`);
+                        setLoadingText(`LOADING... ${percent}%`);
                     }
                 );
 
                 loadingText.remove();
                 loadingBar.style.display = "none";
 
-                // Keep the object URLs alive for the lifetime of the game.
+                // Keep these URLs alive because Unity still references them.
                 window.__unityDataBlobUrl = dataAsset.url;
                 window.__unityWasmBlobUrl = wasmAsset.url;
             }
@@ -217,7 +225,7 @@
             startGame().catch(error => {
                 console.error("Game startup failed:", error);
                 loadingBar.style.display = "none";
-                setLoadingText(`GAME STARTUP FAILED\n${error.message}`);
+                setLoadingText(`ERROR: ${error.message}`);
             });
         })();
     </script>

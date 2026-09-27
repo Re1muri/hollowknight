@@ -102,6 +102,20 @@
                 });
             }
 
+             // -------- Resolution scaling (balanced: 75% internal res) --------
+    function applyResolutionScale(scale) {
+      const canvas = cv;
+      const resize = () => {
+        canvas.width  = Math.floor(window.innerWidth  * scale);
+        canvas.height = Math.floor(window.innerHeight * scale);
+        canvas.style.width  = "100vw";
+        canvas.style.height = "100vh";
+      };
+      window.addEventListener("resize", resize);
+      resize();
+    }
+
+
             function makePartUrls(file, count) {
                 return Array.from(
                     { length: count },

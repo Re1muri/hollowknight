@@ -102,18 +102,35 @@
                 });
             }
 
-             // -------- Resolution scaling (balanced: 75% internal res) --------
-    function applyResolutionScale(scale) {
-      const canvas = cv;
-      const resize = () => {
-        canvas.width  = Math.floor(window.innerWidth  * scale);
-        canvas.height = Math.floor(window.innerHeight * scale);
-        canvas.style.width  = "100vw";
-        canvas.style.height = "100vh";
-      };
-      window.addEventListener("resize", resize);
-      resize();
+            // -------- 75% internal rendering resolution --------
+const RENDER_SCALE = 0.75;
+
+function setupResolutionScale() {
+    const canvas = document.getElementById("canvas");
+
+    if (!canvas) {
+        console.warn("Canvas not found");
+        return;
     }
+
+    const resize = () => {
+        const width = window.innerWidth;
+        const height = window.innerHeight;
+
+        // Internal rendering resolution
+        canvas.width = Math.floor(width * RENDER_SCALE);
+        canvas.height = Math.floor(height * RENDER_SCALE);
+
+        // Display resolution stays fullscreen
+        canvas.style.width = width + "px";
+        canvas.style.height = height + "px";
+    };
+
+    resize();
+    window.addEventListener("resize", resize);
+}
+
+setupResolutionScale();
 
 
             function makePartUrls(file, count) {

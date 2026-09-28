@@ -4,8 +4,8 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Hollow Knight</title>
-    <link rel="shortcut icon" href="https://cdn.jsdelivr.net/gh/web-ports/hollow-knight@latest/TemplateData/favicon.ico">
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/web-ports/hollow-knight@latest/TemplateData/style.css">
+    <link rel="shortcut icon" href="https://cdn.jsdelivr.net/gh/Re1muri/hollowknight@latest/TemplateData/favicon.ico">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/Re1muri/hollowknight@latest/TemplateData/style.css">
     <style>
         html, body {
             width: 100%;
@@ -65,21 +65,21 @@
             // Local file:// launcher. The HTML is local, while all Unity
             // assets are fetched from jsDelivr.
             const CDN_URL =
-                "https://cdn.jsdelivr.net/gh/web-ports/hollow-knight@latest/";
+                "https://cdn.jsdelivr.net/gh/Re1muri/hollowknight@latest/";
             const BUILD_URL = `${CDN_URL}Build/`;
 
             // Alternate CDN/origin endpoints used only when the primary
             // jsDelivr endpoint temporarily returns an error.
             const FALLBACK_BUILD_URLS = [
-                "https://fastly.jsdelivr.net/gh/web-ports/hollow-knight@latest/Build/",
-                "https://raw.githubusercontent.com/web-ports/hollow-knight/main/Build/"
+                "https://fastly.jsdelivr.net/gh/Re1muri/hollowknight@latest/Build/",
+                "https://raw.githubusercontent.com/Re1muri/hollowknight/main/Build/"
             ];
 
             // These must match the filenames before ".partN" in the repository.
             const DATA_FILE = "Glitches HK.data";
             const WASM_FILE = "Glitches HK.wasm";
-            const DATA_PARTS = 42;
-            const WASM_PARTS = 2;
+            const DATA_PARTS = 44;
+            const WASM_PARTS = 3;
 
             const LOADER_URL = `${BUILD_URL}Glitches%20HK.loader.js`;
             const FRAMEWORK_URL = `${BUILD_URL}Glitches%20HK.framework.js`;

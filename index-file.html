@@ -68,14 +68,21 @@
                 "https://cdn.jsdelivr.net/gh/web-ports/hollow-knight@latest/";
             const BUILD_URL = `${CDN_URL}Build/`;
 
+            // Alternate CDN/origin endpoints used only when the primary
+            // jsDelivr endpoint temporarily returns an error.
+            const FALLBACK_BUILD_URLS = [
+                "https://fastly.jsdelivr.net/gh/web-ports/hollow-knight@latest/Build/",
+                "https://raw.githubusercontent.com/web-ports/hollow-knight/main/Build/"
+            ];
+
             // These must match the filenames before ".partN" in the repository.
             const DATA_FILE = "Glitches HK.data";
             const WASM_FILE = "Glitches HK.wasm";
             const DATA_PARTS = 42;
             const WASM_PARTS = 2;
 
-            const LOADER_URL = `${BUILD_URL}Glitches HK.loader.js`;
-            const FRAMEWORK_URL = `${BUILD_URL}Glitches HK.framework.js`;
+            const LOADER_URL = `${BUILD_URL}Glitches%20HK.loader.js`;
+            const FRAMEWORK_URL = `${BUILD_URL}Glitches%20HK.framework.js`;
 
             const loadingText = document.getElementById("loading-text");
             const container = document.getElementById("unity-container");
@@ -103,63 +110,133 @@
             }
 
             // -------- 75% internal rendering resolution --------
-const RENDER_SCALE = 0.75;
+            const RENDER_SCALE = 0.75;
 
-function setupResolutionScale() {
-    const canvas = document.getElementById("canvas");
+            function setupResolutionScale() {
+                const targetCanvas = canvas;
 
-    if (!canvas) {
-        console.warn("Canvas not found");
-        return;
-    }
+                if (!targetCanvas) {
+                    console.warn("Canvas not found");
+                    return;
+                }
 
-    const resize = () => {
-        const width = window.innerWidth;
-        const height = window.innerHeight;
+                const resize = () => {
+                    const width = window.innerWidth;
+                    const height = window.innerHeight;
 
-        // Internal rendering resolution
-        canvas.width = Math.floor(width * RENDER_SCALE);
-        canvas.height = Math.floor(height * RENDER_SCALE);
+                    targetCanvas.width = Math.max(1, Math.floor(width * RENDER_SCALE));
+                    targetCanvas.height = Math.max(1, Math.floor(height * RENDER_SCALE));
 
-        // Display resolution stays fullscreen
-        canvas.style.width = width + "px";
-        canvas.style.height = height + "px";
-    };
+                    // Keep the game visually fullscreen.
+                    targetCanvas.style.width = width + "px";
+                    targetCanvas.style.height = height + "px";
+                };
 
-    resize();
-    window.addEventListener("resize", resize);
-}
+                resize();
+                window.addEventListener("resize", resize);
+            }
 
-setupResolutionScale();
+            // -------- Reliable split-file downloader --------
+            // Downloads remain sequential, matching your working version,
+            // but transient CDN failures are retried and alternate endpoints
+            // are attempted before the loader gives up.
+            const MAX_RETRIES = 5;
+            const RETRY_BASE_MS = 1500;
 
+            const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 
-            function makePartUrls(file, count) {
-                return Array.from(
-                    { length: count },
-                    (_, i) => `${BUILD_URL}${encodeURIComponent(file)}.part${i + 1}`
+            function makePartUrlCandidates(file, partNumber) {
+                const encodedFile = encodeURIComponent(file);
+
+                return [
+                    `${BUILD_URL}${encodedFile}.part${partNumber}`,
+                    ...FALLBACK_BUILD_URLS.map(
+                        base => `${base}${encodedFile}.part${partNumber}`
+                    )
+                ];
+            }
+
+            async function fetchPartWithRetry(urls, label, partNumber, count) {
+                let lastError = null;
+
+                for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+                    setLoadingText(
+                        `LOADING ${label}... part ${partNumber}/${count}` +
+                        (attempt ? ` (retry ${attempt}/${MAX_RETRIES - 1})` : "")
+                    );
+
+                    for (const url of urls) {
+                        try {
+                            const response = await fetch(url, {
+                                cache: "no-store",
+                                mode: "cors"
+                            });
+
+                            if (response.ok) {
+                                return new Uint8Array(await response.arrayBuffer());
+                            }
+
+                            const status = response.status;
+                            lastError = new Error(`HTTP ${status}`);
+
+                            console.warn(
+                                `${label} part ${partNumber}/${count}: ${status} from ${url}`
+                            );
+
+                            // A 404 generally means the file is genuinely absent
+                            // at this endpoint, so immediately test the next one.
+                            // 403/429/5xx are treated as transient CDN failures.
+                            if (![403, 408, 425, 429, 500, 502, 503, 504].includes(status)) {
+                                continue;
+                            }
+                        } catch (error) {
+                            lastError = error instanceof Error
+                                ? error
+                                : new Error(String(error));
+
+                            console.warn(
+                                `${label} part ${partNumber}/${count}: network error from ${url}`,
+                                lastError
+                            );
+                        }
+                    }
+
+                    if (attempt < MAX_RETRIES - 1) {
+                        const delay = Math.min(
+                            RETRY_BASE_MS * (2 ** attempt),
+                            16000
+                        );
+
+                        setLoadingText(
+                            `RETRYING ${label} part ${partNumber}/${count} in ` +
+                            `${Math.ceil(delay / 1000)}s...`
+                        );
+
+                        await sleep(delay);
+                    }
+                }
+
+                throw new Error(
+                    `${label} part ${partNumber}/${count} failed after ${MAX_RETRIES} attempts. ` +
+                    `Last error: ${lastError ? lastError.message : "unknown error"}`
                 );
             }
 
             async function downloadSplitFile(file, count, label) {
                 const parts = [];
                 let totalBytes = 0;
-                const urls = makePartUrls(file, count);
 
-                for (let i = 0; i < urls.length; i++) {
+                for (let i = 0; i < count; i++) {
                     const n = i + 1;
-                    setLoadingText(`LOADING ${label}... part ${n}/${count}`);
+                    const urls = makePartUrlCandidates(file, n);
 
-                    const response = await fetch(urls[i], {
-                        cache: "force-cache"
-                    });
+                    const bytes = await fetchPartWithRetry(
+                        urls,
+                        label,
+                        n,
+                        count
+                    );
 
-                    if (!response.ok) {
-                        throw new Error(
-                            `${label} part ${n}/${count} failed: HTTP ${response.status}`
-                        );
-                    }
-
-                    const bytes = new Uint8Array(await response.arrayBuffer());
                     parts.push(bytes);
                     totalBytes += bytes.byteLength;
 
@@ -181,12 +258,10 @@ setupResolutionScale();
             }
 
             function configureCanvas() {
-                const dpr = isMobile
-                    ? 1
-                    : Math.min(window.devicePixelRatio || 1, 1.5);
-
-                canvas.width = Math.max(1, Math.floor(canvas.clientWidth * dpr));
-                canvas.height = Math.max(1, Math.floor(canvas.clientHeight * dpr));
+                // Keep CSS fullscreen; Unity receives the rendering scale through
+                // devicePixelRatio below. Do not overwrite the 75% canvas here.
+                canvas.style.width = "100vw";
+                canvas.style.height = "100vh";
             }
 
             async function startGame() {
@@ -199,7 +274,7 @@ setupResolutionScale();
                 }
 
                 configureCanvas();
-                window.addEventListener("resize", configureCanvas);
+                setupResolutionScale();
 
                 setLoadingText("PREPARING GAME DATA...");
                 const dataAsset = await downloadSplitFile(
@@ -228,9 +303,7 @@ setupResolutionScale();
                     companyName: "Stratus Dev Ports",
                     productName: "Hollow Knight",
                     productVersion: "Perfect Port",
-                    devicePixelRatio: isMobile
-                        ? 1
-                        : Math.min(window.devicePixelRatio || 1, 1.5)
+                    devicePixelRatio: isMobile ? 1 : RENDER_SCALE
                 };
 
                 setLoadingText("STARTING UNITY...");
